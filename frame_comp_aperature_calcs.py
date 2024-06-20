@@ -1,3 +1,17 @@
+'''
+code originally written by Owen Leonard
+modified by Alex Gleason
+
+This file takes in fits files and calculates the size of the smallest circle that includes the given percentage of light, usually 50%. 
+It optimizes for the size of the circle and the location of the center of the circle. Optimization includes subdividing pixels into 
+smaller chunks so that more accurate measurements are possible.
+
+The basic workflow of the program is as follows, the script loads files and creates separate threads for each file up to the maximum. 
+The DOAstarfinder library is used to locate the centroid of the brightest spot in the image which is used as the initial guess.
+A double series of minimization algorithms is run. For each location the radius is optimized and then a new location is chosen. 
+Eventually this converges to the location with the smallest radius. Run time is often on the order of an hour.
+'''
+
 import os
 import numpy as np
 from astropy.io import fits
@@ -5,12 +19,13 @@ from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import concurrent
+import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor
 from astropy.stats import SigmaClip
 from photutils.background import Background2D, BiweightLocationBackground, ModeEstimatorBackground, MedianBackground
 from photutils.detection import DAOStarFinder
 from astropy.visualization import ImageNormalize, SqrtStretch
-
+import math
 
 # OPTIMIZATION
 
@@ -47,19 +62,25 @@ def calculate_light_through_aperture_vectorized(data, centroid_x, centroid_y, ra
 
 # Aims to find the radius within which a specified percentage of the total light 
 # in the image is contained, for a given center.
-def radius_for_given_percentage(data, center, target_percentage, subdivisions):
+def radius_for_given_percentage(data, center, target_percentage, subdivisions, centroid):
 # Calculates the difference between the desired light percentage and the actual 
 # light percentage within a circle of a given radius. The minimize function 
 # from 'scipy.optimize' is used to adjust the radius to minimize this difference, 
 # effectively finding the radius that meets the light percentage criterion.
     def objective_radius(radius):
         light_in_circle = calculate_light_through_aperture_vectorized(data, center[0], center[1], radius[0], subdivisions)
-        total_intensity = calculate_light_through_aperture_vectorized(data, center[0], center[1], 75, subdivisions)
         current_percentage = (light_in_circle / total_intensity) * 100
+        if np.isnan(current_percentage):
+            current_percentage = 0
         objective_value = abs(current_percentage - target_percentage)
         print(f"Radius: {radius[0]}, Light Percentage: {current_percentage}%, Objective Value: {objective_value}, Center: {center}")
         return objective_value
-    result = minimize(objective_radius, x0=[initial_radius], method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
+    
+    total_intensity = calculate_light_through_aperture_vectorized(data, center[0], center[1], 75, subdivisions)
+    guessed_radius = math.sqrt((center[0]-centroid[0])**2+(center[1]-centroid[1])**2)
+    if guessed_radius < initial_radius:
+        guessed_radius = initial_radius
+    result = minimize(objective_radius, x0=[guessed_radius], method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
     optimized_radius = result.x[0]
     return optimized_radius
 
@@ -71,7 +92,7 @@ def optimize_center_and_radius(data, target_percentage, subdivisions, background
     norm_data = norm(data)
 
     # Use DAOStarFinder to find 'stars' in the image
-    daofind = DAOStarFinder(fwhm=5, threshold=3.5*background_rms_median)
+    daofind = DAOStarFinder(fwhm=5, threshold=25*background_rms_median)
     sources = daofind(data)
 
     if sources is None or len(sources) == 0:
@@ -88,14 +109,21 @@ def optimize_center_and_radius(data, target_percentage, subdivisions, background
 # the required radius for a given center. The minimize function is then used to 
 # adjust the center coordinates to minimize this radius, finding the most
 # efficient center position.
+
     def objective_center(center):
-        if 0 <= center[0] <= data.shape[1] and 0 <= center[1] <= data.shape[0]:
-            return radius_for_given_percentage(data, center, target_percentage, subdivisions)
+        #old rule, uses image boundary
+        #if 0 <= center[0] <= data.shape[1] and 0 <= center[1] <= data.shape[0]:
+        if initial_center[0]-50 < center[0] < initial_center[0]+50 and initial_center[1]-50 < center[1] < initial_center[1]+50:
+            return radius_for_given_percentage(data, center, target_percentage, subdivisions, initial_center)
         else:
             return np.inf
     result = minimize(objective_center, x0=initial_center, method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
     optimized_center = result.x
-    optimal_radius = radius_for_given_percentage(data, optimized_center, target_percentage, subdivisions)
+
+    # optimized_center = initial_center
+
+    optimal_radius = radius_for_given_percentage(data, optimized_center, target_percentage, subdivisions, initial_center)
+    print(optimal_radius)
     return optimized_center, optimal_radius
 
 
@@ -119,7 +147,7 @@ def process_data(data, target_percentage, subdivisions):
     sigma_clip = SigmaClip(sigma=3)
     bkg_estimator = BiweightLocationBackground()
     bkg = Background2D(data, (50,50), filter_size=(3, 3), sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
-    background_rms_median = bkg.background_rms_median
+    background_rms_median = bkg.background_rms_median + 0.1
     data_subtracted = data - bkg.background
     # Clip so no negatives
     data_clipped = np.clip(data_subtracted, a_min=0, a_max=None)
@@ -269,6 +297,18 @@ def plt_opt_cen_hist_ind(optimal_centers, type, target_percentage, output_path, 
 
 def main(folder_path, output_path, subdivisions, max_workers=12):
     data_list = read_fits_data_every_twentieth(folder_path)
+
+    '''
+    data_list = []
+    file_names = os.listdir(folder_path)
+    for i, file_name in enumerate(file_names):
+        if (file_name[-5:] == '.fits'):
+            file_path = os.path.join(folder_path, file_name)
+            with fits.open(file_path) as hdul:
+                data = hdul[0].data
+                data_list.append(data)
+    '''
+
     optimal_centers, optimal_radii = parallel_optimization(data_list, target_percentage, subdivisions, max_workers)
     plt_opt_radii_hist_prog(optimal_radii, type, target_percentage, output_path, place)
     plt_opt_cen_hist_prog(optimal_centers, type, target_percentage, output_path, place)
@@ -283,8 +323,8 @@ subdivisions = 200
 
 
 if __name__ == "__main__":
-    folder_path = '/Users/owenp/BNL Misc./Coding/fits_stuff/BEST_Lab_Tst/Collcam_10s_take3_2/14_07_36'
-    output_path = '/Users/owenp/BNL Misc./Coding/fits_stuff/gifs_and_images/Aperature_Analysis/Frame_Comp_Aperature_Analysis'
+    folder_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-06-17/Capture/11_45_20'
+    output_path = 'C:/Users/Alex/Documents/SULI research/output'
     main(folder_path, output_path, subdivisions)
 
 
