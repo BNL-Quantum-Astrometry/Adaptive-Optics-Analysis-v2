@@ -16,6 +16,7 @@ import os
 import numpy as np
 from astropy.io import fits
 from scipy.optimize import minimize
+from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import concurrent
@@ -26,71 +27,96 @@ from photutils.background import Background2D, BiweightLocationBackground, ModeE
 from photutils.detection import DAOStarFinder
 from astropy.visualization import ImageNormalize, SqrtStretch
 import math
+from numba import jit
 
 # OPTIMIZATION
 
 
-def calculate_light_through_aperture_vectorized(data, centroid_x, centroid_y, radius, subdivisions):
-    # Setup for vectorization
-    subpixel_size = 1.0 / subdivisions
-    subpixel_offsets = np.linspace(-0.5 + 0.5 * subpixel_size, 0.5 - 0.5 * subpixel_size, subdivisions)
-    # Mesh of pixel center coordinates
-    pixel_centers_x, pixel_centers_y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
-    # Distances from pixel centers to centroid
-    distances_to_centroid = np.sqrt((pixel_centers_x - centroid_x) ** 2 + (pixel_centers_y - centroid_y) ** 2)
-    # Identify fully within, border, and outside pixels
-    fully_within_circle = distances_to_centroid <= (radius - 1)
-    at_border = (distances_to_centroid <= radius) & ~fully_within_circle
-    # Calculate total light intensity for fully within pixels
-    total_light_intensity = np.sum(data[fully_within_circle])
-
-    # Process border pixels
-    for i, j in zip(*np.where(at_border)):
-        # Calculate subpixel centers
-        subpixel_centers_x = j + subpixel_offsets
-        subpixel_centers_y = i + subpixel_offsets
-        # distances from subpixel center to centroid
-        subpixel_distances_to_centroid = np.sqrt((subpixel_centers_x - centroid_x) ** 2 + (subpixel_centers_y[:, None] - centroid_y) ** 2)
-        # Determine subpixels within circle
-        within_circle = subpixel_distances_to_centroid <= radius
-        # Overlap fraction for border pixel
-        overlap_fraction = np.mean(within_circle)
-        # Update the total light intensity
-        total_light_intensity += data[i, j] * overlap_fraction
+@jit(nopython=True)
+def calculate_light_through_aperture_vectorized(data, center, radius, subpixel_offsets, pixel_centers_x, pixel_centers_y):
+    # Define the dimensions of data
+    num_rows, num_cols = data.shape
+    
+    # Initialize total light intensity
+    total_light_intensity = 0.0
+    
+    # Loop over each pixel
+    for i in range(num_rows):
+        for j in range(num_cols):
+            # Calculate distance from pixel center to centroid
+            distance_to_centroid = np.sqrt((pixel_centers_x[i, j] - center[0])**2 + (pixel_centers_y[i, j] - center[1])**2)
+            
+            # Check if pixel is fully within the circle
+            if distance_to_centroid <= (radius - 1):
+                total_light_intensity += data[i, j]
+            elif distance_to_centroid <= radius:
+                # Calculate subpixel centers
+                subpixel_intensity = 0.0
+                for k in range(subpixel_offsets.shape[0]):
+                    for l in range(subpixel_offsets.shape[0]):
+                        subpixel_center_x = pixel_centers_x[i, j] + subpixel_offsets[k]
+                        subpixel_center_y = pixel_centers_y[i, j] + subpixel_offsets[l]
+                        
+                        # Calculate distance from subpixel center to centroid
+                        subpixel_distance_to_centroid = np.sqrt((subpixel_center_x - center[0])**2 + (subpixel_center_y - center[1])**2)
+                        
+                        # Check if subpixel is within the circle
+                        if subpixel_distance_to_centroid <= radius:
+                            subpixel_intensity += 1.0
+                
+                # Calculate overlap fraction
+                overlap_fraction = subpixel_intensity / (subpixel_offsets.shape[0] ** 2)
+                
+                # Update total light intensity
+                total_light_intensity += data[i, j] * overlap_fraction
+    
     return total_light_intensity
+
 
 
 # Aims to find the radius within which a specified percentage of the total light 
 # in the image is contained, for a given center.
-def radius_for_given_percentage(data, center, target_percentage, subdivisions, centroid):
+def radius_for_given_percentage(center, data, target_percentage, centroid):
 # Calculates the difference between the desired light percentage and the actual 
 # light percentage within a circle of a given radius. The minimize function 
 # from 'scipy.optimize' is used to adjust the radius to minimize this difference, 
 # effectively finding the radius that meets the light percentage criterion.
+
+    def get_centers():
+        # Setup for vectorization
+        subpixel_size = 1.0 / subdivisions
+        subpixel_offsets = np.linspace(-0.5 + 0.5 * subpixel_size, 0.5 - 0.5 * subpixel_size, subdivisions)
+
+        # Meshgrid of pixel center coordinates
+        pixel_centers_x, pixel_centers_y = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+
+        return subpixel_offsets, pixel_centers_x, pixel_centers_y
+
     def objective_radius(radius):
-        light_in_circle = calculate_light_through_aperture_vectorized(data, center[0], center[1], radius[0], subdivisions)
+        light_in_circle = calculate_light_through_aperture_vectorized(data, center, radius, subpixel_offsets, pixel_centers_x, pixel_centers_y)
         current_percentage = (light_in_circle / total_intensity) * 100
-        if np.isnan(current_percentage):
-            current_percentage = 0
         objective_value = abs(current_percentage - target_percentage)
-        print(f"Radius: {radius[0]}, Light Percentage: {current_percentage}%, Objective Value: {objective_value}, Center: {center}")
+        print(f"Radius: {radius}, Light Percentage: {current_percentage}%, Objective Value: {objective_value}, Center: {center}")
         return objective_value
     
-    total_intensity = calculate_light_through_aperture_vectorized(data, center[0], center[1], 75, subdivisions)
+    subpixel_offsets, pixel_centers_x, pixel_centers_y = get_centers()
+
+    #reference intensity
+    total_intensity = calculate_light_through_aperture_vectorized(data, center, 75, subpixel_offsets, pixel_centers_x, pixel_centers_y)
+
+    #starts initial guess of radius as distance between center and the centroid
     guessed_radius = math.sqrt((center[0]-centroid[0])**2+(center[1]-centroid[1])**2)
-    if guessed_radius < initial_radius:
+    if guessed_radius <= initial_radius:
         guessed_radius = initial_radius
-    result = minimize(objective_radius, x0=[guessed_radius], method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
-    optimized_radius = result.x[0]
+    #result = minimize(objective_radius, x0=[guessed_radius], method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
+    result = minimize_scalar(objective_radius, method='brent', bracket=(1, 10), options={'xtol': 1e-3})
+    optimized_radius = result.x
     return optimized_radius
 
 
 # Optimizes the position of the center such that the smallest possible radius
 # contains the target percentage of the total light.
-def optimize_center_and_radius(data, target_percentage, subdivisions, background_rms_median):
-    norm = ImageNormalize(stretch=SqrtStretch())
-    norm_data = norm(data)
-
+def optimize_center_and_radius(data, target_percentage, background_rms_median):
     # Use DAOStarFinder to find 'stars' in the image
     daofind = DAOStarFinder(fwhm=5, threshold=25*background_rms_median)
     sources = daofind(data)
@@ -110,19 +136,12 @@ def optimize_center_and_radius(data, target_percentage, subdivisions, background
 # adjust the center coordinates to minimize this radius, finding the most
 # efficient center position.
 
-    def objective_center(center):
-        #old rule, uses image boundary
-        #if 0 <= center[0] <= data.shape[1] and 0 <= center[1] <= data.shape[0]:
-        if initial_center[0]-50 < center[0] < initial_center[0]+50 and initial_center[1]-50 < center[1] < initial_center[1]+50:
-            return radius_for_given_percentage(data, center, target_percentage, subdivisions, initial_center)
-        else:
-            return np.inf
-    result = minimize(objective_center, x0=initial_center, method='Nelder-Mead', options={'xatol': 1e-4, 'fatol': 1e-4})
+    bounds = [(initial_center[0]-50, initial_center[0]+50), (initial_center[1]-50, initial_center[1]+50)]
+    args = (data, target_percentage, initial_center)
+    result = minimize(radius_for_given_percentage, x0=initial_center, args=args, bounds=bounds, method='L-BFGS-B', options={'ftol': 1e-3, 'gtol': 1e-3, 'eps': 0.005})
     optimized_center = result.x
 
-    # optimized_center = initial_center
-
-    optimal_radius = radius_for_given_percentage(data, optimized_center, target_percentage, subdivisions, initial_center)
+    optimal_radius = radius_for_given_percentage(optimized_center, data, target_percentage, initial_center)
     print(optimal_radius)
     return optimized_center, optimal_radius
 
@@ -142,7 +161,7 @@ def read_fits_data_every_twentieth(folder_path):
     return data_list
 
 
-def process_data(data, target_percentage, subdivisions):
+def process_data(data, target_percentage):
     # Background estimation and subtraction
     sigma_clip = SigmaClip(sigma=3)
     bkg_estimator = BiweightLocationBackground()
@@ -153,21 +172,21 @@ def process_data(data, target_percentage, subdivisions):
     data_clipped = np.clip(data_subtracted, a_min=0, a_max=None)
 
     # Processing
-    optimal_center, optimal_radius = optimize_center_and_radius(data_clipped, target_percentage, subdivisions, background_rms_median)
+    optimal_center, optimal_radius = optimize_center_and_radius(data_clipped, target_percentage, background_rms_median)
     optimal_center = np.nan_to_num(optimal_center, nan=0.0)
     is_center_valid = not (optimal_center == 0.0).all()
 
     return optimal_center, optimal_radius, is_center_valid
 
 # Parallel processing
-def parallel_optimization(data_list, target_percentage, subdivisions, max_workers=12, ):
+def parallel_optimization(data_list, target_percentage, max_workers=12, ):
     optimal_centers = []
     optimal_radii = []
     opt_cenx_f = open(output_path + f'/{target_percentage}perc_{type}_opt_cenx_list.txt', 'w')
     opt_ceny_f = open(output_path + f'/{target_percentage}perc_{type}_opt_ceny_list.txt', 'w')
     opt_radii_f = open(output_path + f'/{target_percentage}perc_{type}_opt_radii_list.txt', 'w')
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_data, data, target_percentage, subdivisions) for data in data_list]
+        futures = [executor.submit(process_data, data, target_percentage) for data in data_list]
         for future in concurrent.futures.as_completed(futures):
             optimal_center, optimal_radius, is_center_valid = future.result()
             if is_center_valid:
@@ -295,10 +314,9 @@ def plt_opt_cen_hist_ind(optimal_centers, type, target_percentage, output_path, 
     plt.close()
 
 
-def main(folder_path, output_path, subdivisions, max_workers=12):
-    data_list = read_fits_data_every_twentieth(folder_path)
+def main(folder_path, output_path, max_workers=12):
+    #data_list = read_fits_data_every_twentieth(folder_path)
 
-    '''
     data_list = []
     file_names = os.listdir(folder_path)
     for i, file_name in enumerate(file_names):
@@ -307,9 +325,9 @@ def main(folder_path, output_path, subdivisions, max_workers=12):
             with fits.open(file_path) as hdul:
                 data = hdul[0].data
                 data_list.append(data)
-    '''
 
-    optimal_centers, optimal_radii = parallel_optimization(data_list, target_percentage, subdivisions, max_workers)
+    optimal_centers, optimal_radii = parallel_optimization(data_list, target_percentage, max_workers)
+    #optimal_centers, optimal_radii, is_valid = process_data(data_list[0], target_percentage)
     plt_opt_radii_hist_prog(optimal_radii, type, target_percentage, output_path, place)
     plt_opt_cen_hist_prog(optimal_centers, type, target_percentage, output_path, place)
     plt_opt_radii_hist_ind(optimal_radii, type, target_percentage, output_path, place)
@@ -325,7 +343,7 @@ subdivisions = 200
 if __name__ == "__main__":
     folder_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-06-17/Capture/11_45_20'
     output_path = 'C:/Users/Alex/Documents/SULI research/output'
-    main(folder_path, output_path, subdivisions)
+    main(folder_path, output_path)
 
 
 
