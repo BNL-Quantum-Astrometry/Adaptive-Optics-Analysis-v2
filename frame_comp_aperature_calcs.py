@@ -73,7 +73,6 @@ def calculate_light_through_aperture_vectorized(data, center, radius, subpixel_o
     return total_light_intensity
 
 
-
 # Aims to find the radius within which a specified percentage of the total light 
 # in the image is contained, for a given center.
 def radius_for_given_percentage(center, data, target_percentage, centroid):
