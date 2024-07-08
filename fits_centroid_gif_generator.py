@@ -9,8 +9,8 @@ from photutils.detection import DAOStarFinder
 from astropy.visualization import SqrtStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 
-source_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff/BEST_Lab_Tst/Guidecam_10s_7/14_01_22'
-output_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff/images_and_gifs'
+output_directory = 'C:/Users/Alex/Documents/SULI research/output'
+source_directory = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-06-17/Capture/11_45_20'
 gif_filename = 'lab_guidecam_turb_centertracing.gif'
 num_workers = 8
 

@@ -1,10 +1,16 @@
+'''
+created by Owen Leonard
+
+creates a stacked image of all input files
+'''
+
 import os
 import numpy as np
 from astropy.io import fits
 import matplotlib.pyplot as plt
 
-source_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff/Fst_On_Sky_Tst/Sirius_guidecam_nofilter_5ms_1bin/21_50_51'
-output_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff'
+output_directory = 'C:/Users/Alex/Documents/SULI research/output'
+source_directory = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-07-03/Capture/15_59_47'
 os.makedirs(output_directory, exist_ok=True)
 
 data_list = []
@@ -34,7 +40,7 @@ if data_list:
     plt.axis('on') 
     plt.tight_layout()
 
-    svg_filename = os.path.join(output_directory, 'sky_guidecam_avgimg.svg')
+    svg_filename = os.path.join(output_directory, 'sky_guidecam_avgimg.jpg')
     plt.savefig(svg_filename, format='jpg', bbox_inches='tight', pad_inches=0.0)
     plt.close()
 

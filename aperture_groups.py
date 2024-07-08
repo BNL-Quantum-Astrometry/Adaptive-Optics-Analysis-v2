@@ -234,9 +234,9 @@ def save_data_images_with_one_app(data_lists_list, radii_list, shared_x_title, s
 
 warnings.filterwarnings("ignore", category=RuntimeWarning) #This was annoying but couldnt figure out how to fix, it didn't cause any issues with the results so I just swept under the rug
 subdivisions = 50
-gc_source_path = '/Users/owenp/BNL Misc./Coding/fits_stuff/BEST_Lab_Tst/Guidecam_10s_7/14_01_22'
-cc_source_path = '/Users/owenp/BNL Misc./Coding/fits_stuff/BEST_Lab_Tst/Collcam_10s_take3/14_06_53'
-output_path =  '/Users/owenp/BNL Misc./Coding/fits_stuff/gifs_and_images/Poster_Data/Part_2'
+gc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-07-03/Capture/15_55_16'
+cc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-07-03/Capture/15_56_04'
+output_path =  'C:/Users/Alex/Documents/SULI research/output'
 
 
 def main(output_path, gc_aggregate_data, cc_aggregate_data, gc_random_frame_data, cc_random_frame_data):

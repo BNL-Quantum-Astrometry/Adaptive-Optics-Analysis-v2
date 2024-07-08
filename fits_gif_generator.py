@@ -1,3 +1,8 @@
+'''
+written by Owen Leonard
+
+Creates a gif of input fits files
+'''
 
 import os
 import numpy as np
@@ -7,8 +12,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 
 num_workers = 8
-output_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff'
-source_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff/Fst_On_Sky_Tst/Sirius_guidecam_filter_10ms_1bin/21_48_34'
+output_directory = 'C:/Users/Alex/Documents/SULI research/output'
+source_directory = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-06-17/Capture/11_45_20'
 gif_filename = 'sky_guidecam_turb.gif'
 
 os.makedirs(output_directory, exist_ok=True)
@@ -30,7 +35,7 @@ def process_fits_file(filename):
         print(f"Failed to process {filename}: {e}")
         return None
 
-def main(source_directory, output_directory, gif_filename, num_workers=4):
+def main(num_workers=4):
     os.makedirs(output_directory, exist_ok=True)
     fits_filenames = [f for f in os.listdir(source_directory) if f.endswith('.fits')]
     
@@ -43,13 +48,10 @@ def main(source_directory, output_directory, gif_filename, num_workers=4):
     # Make gif
     if frames:
         gif_path = os.path.join(output_directory, gif_filename)
-        imageio.mimsave(gif_path, frames, 'GIF', duration=0.5)
+        imageio.mimwrite(gif_path, frames, format='GIF', fps=30)
         print(f"GIF saved successfully at {gif_path}.")
     else:
         print("No FITS files processed.")
 
 if __name__ == '__main__':
-    source_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff/Fst_On_Sky_Tst/Sirius_guidecam_filter_10ms_1bin/21_48_34'
-    output_directory = '/Users/owenp/BNL Misc./Coding/fits_stuff'
-    gif_filename = 'sky_guidecam_turb.gif' 
-    main(source_directory, output_directory, gif_filename)
+    main()

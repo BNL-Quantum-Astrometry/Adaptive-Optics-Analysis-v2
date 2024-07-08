@@ -92,6 +92,8 @@ def radius_for_given_percentage(center, data, target_percentage, centroid):
         return subpixel_offsets, pixel_centers_x, pixel_centers_y
 
     def objective_radius(radius):
+        if radius < 0:
+            return np.inf
         light_in_circle = calculate_light_through_aperture_vectorized(data, center, radius, subpixel_offsets, pixel_centers_x, pixel_centers_y)
         current_percentage = (light_in_circle / total_intensity) * 100
         objective_value = abs(current_percentage - target_percentage)
@@ -117,7 +119,7 @@ def radius_for_given_percentage(center, data, target_percentage, centroid):
 # contains the target percentage of the total light.
 def optimize_center_and_radius(data, target_percentage, background_rms_median):
     # Use DAOStarFinder to find 'stars' in the image
-    daofind = DAOStarFinder(fwhm=5, threshold=25*background_rms_median)
+    daofind = DAOStarFinder(fwhm=3, threshold=1.5*background_rms_median)
     sources = daofind(data)
 
     if sources is None or len(sources) == 0:
@@ -168,7 +170,10 @@ def process_data(data, target_percentage):
     background_rms_median = bkg.background_rms_median + 0.1
     data_subtracted = data - bkg.background
     # Clip so no negatives
-    data_clipped = np.clip(data_subtracted, a_min=0, a_max=None)
+    if allow_neg == False:
+        data_clipped = np.clip(data_subtracted, a_min=0, a_max=None)
+    else:
+        data_clipped = data_subtracted
 
     # Processing
     optimal_center, optimal_radius = optimize_center_and_radius(data_clipped, target_percentage, background_rms_median)
@@ -298,6 +303,7 @@ def plt_opt_cen_hist_ind(optimal_centers, type, target_percentage, output_path, 
     plt.grid(True)
     plt.axhline(0, color='gray', linestyle='--')  
     plt.axvline(0, color='gray', linestyle='--')  
+    plt.axis([-10, 10, -10, 10])
 
     std_dev_x = np.std(optimal_centers[:, 0])
     std_dev_y = np.std(optimal_centers[:, 1])
@@ -332,15 +338,17 @@ def main(folder_path, output_path, max_workers=12):
     plt_opt_radii_hist_ind(optimal_radii, type, target_percentage, output_path, place)
     plt_opt_cen_hist_ind(optimal_centers, type, target_percentage, output_path, place)
 
-type = 'LABcc'
-place = 'LAB'
+type = '5ms_sky_test1_guidecam'
+place = 'sky_test_1'
 target_percentage = 50
 initial_radius = 1.5
 subdivisions = 200
+#controls whether pixel values are allowed to be negative, wierd things start to happen if so but it can help eliminate background total from low SNR images
+allow_neg = True
 
 
 if __name__ == "__main__":
-    folder_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-06-17/Capture/11_45_20'
+    folder_path = 'C:/Users/Alex/Desktop/2024-06-27/5ms_sky_test1_guidecam/22_48_07'
     output_path = 'C:/Users/Alex/Documents/SULI research/output'
     main(folder_path, output_path)
 
