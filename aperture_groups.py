@@ -1,3 +1,11 @@
+'''
+Created by Owen Leonard
+
+This script combines images into a single aperature and creates a comparison between the control (no PID) and guide (PID) views to see if
+it is getting better or worse. It also overlays rings so you can see the aperature at various radii. 
+
+
+'''
 import os
 import numpy as np
 from astropy.io import fits

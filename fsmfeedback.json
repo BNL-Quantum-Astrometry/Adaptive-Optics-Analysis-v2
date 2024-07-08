@@ -1,0 +1,47 @@
+{
+    "pipeline": [
+	{
+	    "uri": "file:/home/qastro/aylp_asi/build/aylp_asi.so",
+	    "params": {
+		"cam_index": 0,
+		"roi_start_y": 0,
+		"roi_start_x": 10.0,
+		"roi_height": 256,
+		"roi_width": 256
+	    }
+	},
+	{
+	    "uri":"anyloop:file_sink",
+	    "params":{
+		"filename":"/tmp/aylp.fifo",
+		"flush":true
+	    }
+	},
+	{
+	    "uri":"anyloop:center_of_mass",
+	    "params": {
+		"region_height": 256,
+		"region_width": 256,
+		"thread_count": 1
+	    }
+	},
+	{
+	    "uri": "anyloop:pid",
+	    "params": {
+		"type": "vector",
+		"p": 0.1,
+		"i": 0.2,
+		"d": 0
+	    }
+	},
+	{
+	    "uri": "anyloop:logger",
+	    "params": {
+		"type": "vector"
+	    }
+	},
+	{
+	    "uri": "file:/home/qastro/aylp_alsa/build/aylp_alsa.so"
+	}
+    ]
+}
