@@ -338,17 +338,17 @@ def main(folder_path, output_path, max_workers=12):
     plt_opt_radii_hist_ind(optimal_radii, type, target_percentage, output_path, place)
     plt_opt_cen_hist_ind(optimal_centers, type, target_percentage, output_path, place)
 
-type = '5ms_sky_test1_guidecam'
-place = 'sky_test_1'
-target_percentage = 50
+type = 'run11_sky_test2'
+place = 'sky_test_2'
+target_percentage = 5
 initial_radius = 1.5
 subdivisions = 200
 #controls whether pixel values are allowed to be negative, wierd things start to happen if so but it can help eliminate background total from low SNR images
-allow_neg = True
+allow_neg = False
 
 
 if __name__ == "__main__":
-    folder_path = 'C:/Users/Alex/Desktop/2024-06-27/5ms_sky_test1_guidecam/22_48_07'
+    folder_path = 'C:/Users/Alex/Desktop/Sharpcap Captures/2024-08-01/Capture/23_12_00'
     output_path = 'C:/Users/Alex/Documents/SULI research/output'
     main(folder_path, output_path)
 

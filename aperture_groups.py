@@ -242,13 +242,13 @@ def save_data_images_with_one_app(data_lists_list, radii_list, shared_x_title, s
 
 warnings.filterwarnings("ignore", category=RuntimeWarning) #This was annoying but couldnt figure out how to fix, it didn't cause any issues with the results so I just swept under the rug
 subdivisions = 50
-gc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-07-03/Capture/15_55_16'
-cc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-07-03/Capture/15_56_04'
+cc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-08-01/Capture/23_03_53'
+gc_source_path = 'C:/Users/Alex/Desktop/SharpCap Captures/2024-08-01/Capture/22_08_10'
 output_path =  'C:/Users/Alex/Documents/SULI research/output'
 
 
 def main(output_path, gc_aggregate_data, cc_aggregate_data, gc_random_frame_data, cc_random_frame_data):
-    save_data_images_with_multiple_circles([gc_aggregate_data, gc_random_frame_data, cc_aggregate_data, cc_random_frame_data], [[2.9, 5.3, 8.5] for _ in range(4)],
+    save_data_images_with_multiple_circles([gc_aggregate_data, gc_random_frame_data, cc_aggregate_data, cc_random_frame_data], [[5, 10, 15] for _ in range(4)],
                                         'X Pixel', 'Y Pixel', ['Control', 'AO-Corrected'], ['Aggregate', 'Single Frame'], output_path, "aggregate_data_multiple_apertures.svg") #USE CC AVG OPTIMAL RADII AT 25,50,75 PERC CAPTURE FOR RADII
     save_data_images_with_one_app([gc_aggregate_data, gc_aggregate_data, cc_aggregate_data, cc_aggregate_data], [1.75, 4, 1.75, 4],
                                         'X Pixel', 'Y Pixel', ['Control', 'AO-Corrected'], ['Fiber', 'Lantern'], output_path, "aggregate_data_single_apertures.svg")

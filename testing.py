@@ -1,3 +1,7 @@
+'''
+test script to test image manipulation things and then see the output as an image, mainly used for debugging and testing things and not all that useful
+'''
+
 import numpy as np
 from astropy.io import fits
 from astropy.stats import SigmaClip
