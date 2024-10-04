@@ -49,7 +49,7 @@ def calculate_light_through_aperture_vectorized(data, center, radius, subpixel_o
             # Check if pixel is fully within the circle
             if distance_to_centroid <= (radius - 1):
                 total_light_intensity += data[i, j]
-            elif distance_to_centroid <= radius:
+            elif distance_to_centroid <= (radius + 1):
                 # Calculate subpixel centers
                 subpixel_intensity = 0.0
                 for k in range(subpixel_offsets.shape[0]):
